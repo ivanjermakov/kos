@@ -1,56 +1,48 @@
-set timestep to 0.01.
+set timestep to 0.1.
 // TODO: calculate based on TWR
-set maxThrottle to 0.4.
-set errThrottle to 0.05.
-set aggressiveness to 8.
-set minAggressiveness to 1.5.
-set errTolerance to 0.05.
-set slowDownCeiling to 1000.
+set maxThrottle to 0.3.
+set errThrottle to 0.1.
+set aggressiveness to 10.0.
+set minAggressiveness to 2.0.
+set errTolerance to 0.01.
+set slowDownCeiling to 2000.
+set enableGliding to false.
 
 until false {	
 	if (addons:tr:hasimpact) {
-		// at close target proximity, use distance to target as height
-		if alt:radar < 1000 {
-			set h to target:position:mag.
-		} else {
-			set h to alt:radar.
-		}
 		set vs to ship:verticalspeed.
 		set main to -target:position.
 		set adj to target:geoposition:position - addons:tr:impactpos:position.
 		set dist to adj:mag.
+		// at close target proximity, use distance to target as height
+		if (alt:radar < 1000 and dist < 100) {
+			set h to target:position:mag.
+		} else {
+			set h to alt:radar.
+		}
+		set glide to main - (min(dist / 100, 1.0) * aggressiveness * adj).
 		set st to "idle".
 		
-		if (h > slowDownCeiling) {
-			// ignore slowing down until this low
-			set dir to adj.
-		} else {
-			// closer to the target -> smoother adjustments
-		    set heightC to h / slowDownCeiling.
-			set dir to main + ((minAggressiveness + aggressiveness * heightC) * adj).
-		}
-		set angle to ship:facing:forevector:normalized * dir:normalized.
-		set err to 1 - (angle + 1) / 2.
+		set heightK to min(h / slowDownCeiling, 2.0).
+		set totalAgr to minAggressiveness + aggressiveness * heightK.
+		set dir to main + (totalAgr * adj).
+		lock err to 1 - (ship:facing:forevector:normalized * dir:normalized + 1) / 2.
 
 		lock steering to dir.
 
 		if (
 			(h < 5000 and vs < -200) or
 			(h < 1000 and vs < -100) or
-			(h < 200 and vs < -20)
+			(h < 100 and vs < -20)
 		) {
 			set st to "full slowing down".	
 			set dir to main.
-			// TODO: refactor
-			set angle to ship:facing:forevector:normalized * dir:normalized.
-			set err to 1 - (angle + 1) / 2.
 			if (err > errTolerance) {
 				set st to st + " [error high]".
 				lock throttle to errThrottle.
 			} else {
-				lock throttle to maxThrottle * 2.
+				lock throttle to maxThrottle.
 			}
-			wait timestep.
 		} else if (
 			(h < 5000 and vs < -200) or
 			(h < 400 and vs < -20) or
@@ -59,7 +51,7 @@ until false {
 			(h < 3 and vs < -1)
 		) {
 			set st to "slowing down".	
-			if (err > errTolerance / 2) {
+			if (err > errTolerance) {
 				set st to st + " [error high]".
 				lock throttle to (1 / err) * errThrottle.
 			} else {
@@ -70,11 +62,10 @@ until false {
 				}
 				lock throttle to maxThrottle.
 			}
-			wait timestep.
 		} else	if (
 			vs < 0 and
 			(
-				(dist > 2000) or
+				(dist > 5000) or
 				(h < 20000 and dist > 1000) or
 				(h < 5000 and dist > 200) or
 				(h < 2000 and dist > 100) or
@@ -91,12 +82,14 @@ until false {
 				lock throttle to (1 / err) * errThrottle.
 			} else {
 				// apply less throttle when closer to the target
-				lock throttle to min(dist * 10 / h, maxThrottle).
+				lock throttle to min((dist * 10 / h) * maxThrottle, maxThrottle).
 			}
-			wait timestep.
 		} else {
-			// reduce movement to keep trajectory
-			// set dir to ship:facing:forevector.
+			lock throttle to 0.0.
+			if (enableGliding and h > slowDownCeiling) {
+				set st to "gliding".
+				set dir to glide.
+			}
 		}
 		
 		if (h < 100) {
@@ -104,20 +97,18 @@ until false {
 		}
 		
 		clearscreen.
-		print "dist: " + dist.
-		print "vs: " + vs.
-		print "alt: " + h.
-		print "err: " + round(err, 2).
-		print "steering: " + steering.
-		print "throttle: " + throttle.
+		print "dist:":padright(10) + round(dist, 2).
+		print "vs:":padright(10) + round(vs, 2).
+		print "alt:":padright(10) + round(h, 2).
+		print "totalAgr:":padright(10) + round(totalAgr, 2).
+		print "err:":padright(10) + round(err, 2).
+		print "throttle:":padright(10) + round(throttle, 2).
 		print " ".
-		print "st: " + st.
+		print "st:":padright(10) + st.
 	} else {
 		sas on.
 		break.
 	}
-	if (st = "idle") {
-		lock throttle to 0.0.
-		wait timestep.
-	}
+
+	wait timestep.
 }
