@@ -1,15 +1,20 @@
 set timestep to 0.01.
 // TODO: calculate based on TWR
-set maxThrottle to 1.0.
-set errThrottle to 0.1.
-set aggressiveness to 4.
-set minAggressiveness to 1.
-set errTolerance to 0.1.
-set slowDownCeiling to 500.
+set maxThrottle to 0.4.
+set errThrottle to 0.05.
+set aggressiveness to 8.
+set minAggressiveness to 1.5.
+set errTolerance to 0.05.
+set slowDownCeiling to 1000.
 
 until false {	
 	if (addons:tr:hasimpact) {
-		set h to target:position:mag.
+		// at close target proximity, use distance to target as height
+		if alt:radar < 1000 {
+			set h to target:position:mag.
+		} else {
+			set h to alt:radar.
+		}
 		set vs to ship:verticalspeed.
 		set main to -target:position.
 		set adj to target:geoposition:position - addons:tr:impactpos:position.
@@ -31,16 +36,33 @@ until false {
 
 		if (
 			(h < 5000 and vs < -200) or
+			(h < 1000 and vs < -100) or
+			(h < 200 and vs < -20)
+		) {
+			set st to "full slowing down".	
+			set dir to main.
+			// TODO: refactor
+			set angle to ship:facing:forevector:normalized * dir:normalized.
+			set err to 1 - (angle + 1) / 2.
+			if (err > errTolerance) {
+				set st to st + " [error high]".
+				lock throttle to errThrottle.
+			} else {
+				lock throttle to maxThrottle * 2.
+			}
+			wait timestep.
+		} else if (
+			(h < 5000 and vs < -200) or
 			(h < 400 and vs < -20) or
-			(h < 100 and vs < -10) or
+			(h < 50 and vs < -10) or
 			(h < 20 and vs < -5) or
 			(h < 3 and vs < -1)
 		) {
+			set st to "slowing down".	
 			if (err > errTolerance / 2) {
-				set st to "error high".
+				set st to st + " [error high]".
 				lock throttle to (1 / err) * errThrottle.
 			} else {
-				set st to "slowing down".	
 				if (vs > -20) {
 				 	lock throttle to max(dist * 10 / h, errThrottle).
 				} else {
@@ -52,26 +74,29 @@ until false {
 		} else	if (
 			vs < 0 and
 			(
+				(dist > 2000) or
 				(h < 20000 and dist > 1000) or
 				(h < 5000 and dist > 200) or
 				(h < 2000 and dist > 100) or
 				(h < 1000 and dist > 50) or
 				(h < 200 and dist > 20) or
-				(h < 100 and dist > 10)
+				(h < 100 and dist > 10) or
+				(h < 50 and dist > 5) or
+				(h < 10 and dist > 2)
 			)
 		) {
+			set st to "getting closer to target".
 			if (err > errTolerance) {
-				set st to "error high".
+				set st to st + " [error high]".
 				lock throttle to (1 / err) * errThrottle.
 			} else {
-				set st to "getting closer to target".
 				// apply less throttle when closer to the target
 				lock throttle to min(dist * 10 / h, maxThrottle).
 			}
 			wait timestep.
 		} else {
 			// reduce movement to keep trajectory
-			set dir to ship:facing:forevector.
+			// set dir to ship:facing:forevector.
 		}
 		
 		if (h < 100) {
