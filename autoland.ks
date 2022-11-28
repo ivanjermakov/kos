@@ -10,6 +10,9 @@ set comFromGround to 6.0.
 // TODO: calculate based on TWR
 set maxThrottle to 1.0.
 
+// min throttle for smooth slowing down
+set minThrottle to 0.3.
+
 // throttle use for error corrections
 set errThrottle to 0.1.
 
@@ -93,7 +96,7 @@ until false {
 				lock throttle to errThrottle.
 			} else {
 				set throttleK to min(((slowDownLimit - vs) / -slowDownLimit) ^ 1/4, 1.0).
-				lock throttle to throttleK * maxThrottle + errThrottle.
+				lock throttle to throttleK * maxThrottle + minThrottle.
 			}
 		} else	if (vs < 0 and not rangeAchieved) {
 			set st to "getting closer to target".
@@ -133,34 +136,41 @@ until false {
 		print " ".
 		print "st:":padright(20) + st.
 	} else {
-		sas on.
-		wait 1.
-		set sasmode to "RADIALOUT".
+		end().
 		break.
 	}
 
 	wait timestep.
 }
 
+function end {
+	set throttle to 0.
+	sas on.
+	wait 1.
+	set sasmode to "RADIALOUT".
+}
+
 // getProximityRange :: List
 // returns list of two scalars: [min proximity, max proximity]
 function getProximityRange {
-	if (h < 10) {
-		return list(1, 2).
+	if (h < 20) {
+		return list(2, 5).
 	} else if (h < 50) {
-		return list(2, 10).
+		return list(5, 10).
 	} else if (h < 100) {
 		return list(10, 20).
 	} else if (h < 200) {
-		return list(20, 50).
+		return list(10, 50).
+	} else if (h < 500) {
+		return list(20, 100).
 	} else if (h < 1000) {
-		return list(50, 100).
+		return list(20, 200).
 	} else if (h < 2000) {
 		return list(100, 200).
 	} else if (h < 5000) {
 		return list(200, 500).
 	} else if (h < 20000) {
-		return list(500, 1000).
+		return list(500, 2000).
 	} else {
 		return list(1000, 2000).
 	}
@@ -169,9 +179,9 @@ function getProximityRange {
 // getForceSlowDownLimit :: scalar
 // returns ceiling vertical speed for current altitude for forced slow down
 function getForceSlowDownLimit {
-	if (h < 1000) { return -100. }
-	else if (h < 10000) { return -400. }
-	else if (h < 20000) { return -600. }
+	if (h < 500) { return -100. }
+	else if (h < 1000) { return -100. }
+	else if (h < 5000) { return -400. }
 	else if (h < 50000) { return -1500. }
 	else { return -infinity. }
 }
@@ -179,9 +189,9 @@ function getForceSlowDownLimit {
 // getSlowDownLimit :: scalar
 // returns ceiling vertical speed for current altitude for regular slow down
 function getSlowDownLimit {
-	if (h < 10) { return -5. }
-	else if (h < 50) { return -10. }
+	if (h < 20) { return -5. }
+	else if (h < 100) { return -10. }
 	else if (h < 400) { return -20. }
-	else if (h < 500) { return -50. }
+	else if (h < 600) { return -50. }
 	else { return -infinity. }
 }
