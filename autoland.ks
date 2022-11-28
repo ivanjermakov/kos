@@ -1,4 +1,17 @@
-// CONFIGURATION
+//
+//    _______  __   __  _______  _______  ___      _______  __    _  ______  
+//   |   _   ||  | |  ||       ||       ||   |    |   _   ||  |  | ||      | 
+//   |  |_|  ||  | |  ||_     _||   _   ||   |    |  |_|  ||   |_| ||  _    |
+//   |       ||  |_|  |  |   |  |  | |  ||   |    |       ||       || | |   |
+//   |       ||       |  |   |  |  |_|  ||   |___ |       ||  _    || |_|   |
+//   |   _   ||       |  |   |  |       ||       ||   _   || | |   ||       |
+//   |__| |__||_______|  |___|  |_______||_______||__| |__||_|  |__||______| 
+//
+//												autolanding script for kOS
+//														   by ivanjermakov
+
+
+// <CONFIGURATION>
 
 // sleep at the end of each step
 set timestep to 0.1.
@@ -14,7 +27,7 @@ set maxThrottle to 1.0.
 set minThrottle to 0.3.
 
 // throttle use for error corrections
-set errThrottle to 0.1.
+set errThrottle to 0.3.
 
 // aggressiveness value to use over slowDownCeiling
 set aggressiveness to 10.0.
@@ -37,6 +50,8 @@ set glideAggressiveness to 10.0.
 // enable gliding
 set enableGliding to true.
 
+// </CONFIGURATION>
+
 
 // globals
 set infinity to 1e10.
@@ -54,12 +69,12 @@ until false {
 		} else {
 			set h to alt:radar.
 		}
-		set st to "idle".
 		
 		// TODO: keep lower agr on high dist
 		set heightK to min(h / slowDownCeiling, 1.0).
 		set totalAgr to minAggressiveness + aggressiveness * heightK.
-		set dir to main + (totalAgr * adj).
+		set getCloserV to main + (totalAgr * adj).
+		
 		lock err to 1 - (ship:facing:forevector:normalized * dir:normalized + 1) / 2.
 		lock proximityRange to getProximityRange().
 		if (rangeAchieved) {
@@ -72,12 +87,14 @@ until false {
 			}
 		}
 
+		set dir to main.
 		lock steering to dir.
 
 		set forceSlowDownLimit to getForceSlowDownLimit().
 		set slowDownLimit to getSlowDownLimit().
 		if (forceSlowDownLimit > vs) {
 			set st to "force slowing down".	
+			set dir to getCloserV.
 			if (err > errTolerance) {
 				set st to st + " [error high]".
 				lock throttle to (1 / err) + errThrottle.
@@ -91,6 +108,7 @@ until false {
 			}
 		} else if (slowDownLimit > vs) {
 			set st to "slowing down".	
+			set dir to getCloserV.
 			if (err > errTolerance) {
 				set st to st + " [error high]".
 				lock throttle to errThrottle.
@@ -98,8 +116,9 @@ until false {
 				set throttleK to min(((slowDownLimit - vs) / -slowDownLimit) ^ 1/4, 1.0).
 				lock throttle to throttleK * maxThrottle + minThrottle.
 			}
-		} else	if (vs < 0 and not rangeAchieved) {
+		} else if (vs < 0 and not rangeAchieved) {
 			set st to "getting closer to target".
+			set dir to getCloserV.
 			if (err > errTolerance) {
 				set st to st + " [error high]".
 				lock throttle to errThrottle.
@@ -112,6 +131,9 @@ until false {
 				set st to "gliding".
 				set glide to main - (min(dist / 100, 1.0) * glideAggressiveness * adj).
 				set dir to glide.
+			} else {
+				set st to "idle".
+				set dir to main.
 			}
 		}
 		
@@ -182,6 +204,7 @@ function getForceSlowDownLimit {
 	if (h < 500) { return -100. }
 	else if (h < 1000) { return -100. }
 	else if (h < 5000) { return -400. }
+	else if (h < 10000) { return -600. }
 	else if (h < 50000) { return -1500. }
 	else { return -infinity. }
 }
